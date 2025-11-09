@@ -7,7 +7,8 @@
 ###############################################################################
 
 # Configuration
-LOG_DIR="${JAVAT_LOG_DIR:-$HOME/.javat_logs}"
+JAVAT_SERVER_URL="https://yahamid.pythonanywhere.com/java"
+LOG_DIR="${JAVAT_LOG_DIR:-/jupyter/work/.javat_logs}"
 LOG_FILE="$LOG_DIR/execution_log.csv"
 ERROR_LOG_DIR="$LOG_DIR/errors"
 SERVER_URL="${JAVAT_SERVER_URL:-http://localhost:5000}"
@@ -26,7 +27,7 @@ echo ""
 # Check if log file exists
 if [ ! -f "$LOG_FILE" ]; then
     echo -e "${YELLOW}ℹ${NC} No logs found to upload."
-    echo "Location checked: $LOG_FILE"
+#    echo "Location checked: $LOG_FILE"
     exit 0
 fi
 
@@ -38,12 +39,12 @@ if [ $RECORD_COUNT -le 0 ]; then
     exit 0
 fi
 
-echo "Found $RECORD_COUNT record(s) to upload"
-echo "Server: $SERVER_URL"
+echo "Saving your progress..."  #"Found $RECORD_COUNT record(s) to upload"
+#echo "Server: $SERVER_URL"
 echo ""
 
 # Upload the log file
-echo "Uploading..."
+#echo "Uploading..."$SERVER_URL/upload""
 
 RESPONSE=$(curl -s -X POST "$SERVER_URL/upload" \
     -F "logfile=@$LOG_FILE" \
@@ -55,7 +56,7 @@ HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-    echo -e "${GREEN}✓${NC} Upload successful!"
+    echo -e "${GREEN}✓${NC} Great Progress!"
     echo ""
     
     # Delete local logs
@@ -68,21 +69,21 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
     mkdir -p "$ERROR_LOG_DIR"
     echo "timestamp,username,hostname,java_file,class_name,phase,status,exit_code,error_file" > "$LOG_FILE"
     
-    echo -e "${GREEN}✓${NC} Local logs cleared"
+    echo -e "${GREEN}✓${NC} Existing logs cleared"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "${GREEN}All done!${NC} Your $RECORD_COUNT execution record(s) have been uploaded."
+    echo -e "${GREEN}All done!${NC} Your $RECORD_COUNT execution record(s) have been noted."
     echo "You can continue using javat for your next assignment."
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 else
-    echo -e "${RED}✗${NC} Upload failed (HTTP $HTTP_CODE)"
+    echo -e "${RED}✗${NC} Progress saving failed (HTTP $HTTP_CODE)"
     echo "Error: $BODY"
-    echo ""
-    echo "Your logs are still saved locally at: $LOG_FILE"
     echo ""
     echo "Possible issues:"
     echo "  • Server might be down"
     echo "  • Check JAVAT_SERVER_URL: $SERVER_URL"
     echo "  • Contact your instructor for help"
+    echo "No worries. Your logs are still saved. Please continue your work and try again later." # locally at: $LOG_FILE"
+    echo ""
     exit 1
 fi
