@@ -1,0 +1,88 @@
+#!/bin/bash
+
+###############################################################################
+# javat-finished
+# Simple script for students to upload their logs when done
+# Usage: javat-finished
+###############################################################################
+
+# Configuration
+LOG_DIR="${JAVAT_LOG_DIR:-$HOME/.javat_logs}"
+LOG_FILE="$LOG_DIR/execution_log.csv"
+ERROR_LOG_DIR="$LOG_DIR/errors"
+SERVER_URL="${JAVAT_SERVER_URL:-http://localhost:5000}"
+
+# Colors for output
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║           Uploading Your Java Programming Logs                 ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
+echo ""
+
+# Check if log file exists
+if [ ! -f "$LOG_FILE" ]; then
+    echo -e "${YELLOW}ℹ${NC} No logs found to upload."
+    echo "Location checked: $LOG_FILE"
+    exit 0
+fi
+
+# Count records (excluding header)
+RECORD_COUNT=$(($(wc -l < "$LOG_FILE") - 1))
+
+if [ $RECORD_COUNT -le 0 ]; then
+    echo -e "${YELLOW}ℹ${NC} Log file is empty, nothing to upload."
+    exit 0
+fi
+
+echo "Found $RECORD_COUNT record(s) to upload"
+echo "Server: $SERVER_URL"
+echo ""
+
+# Upload the log file
+echo "Uploading..."
+
+RESPONSE=$(curl -s -X POST "$SERVER_URL/upload" \
+    -F "logfile=@$LOG_FILE" \
+    --connect-timeout 10 \
+    --max-time 30 \
+    -w "\n%{http_code}" 2>&1)
+
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    echo -e "${GREEN}✓${NC} Upload successful!"
+    echo ""
+    
+    # Delete local logs
+    echo "Cleaning up local logs..."
+    rm -f "$LOG_FILE"
+    rm -rf "$ERROR_LOG_DIR"
+    rm -f "$LOG_DIR/.last_upload"
+    
+    # Recreate directories for next session
+    mkdir -p "$ERROR_LOG_DIR"
+    echo "timestamp,username,hostname,java_file,class_name,phase,status,exit_code,error_file" > "$LOG_FILE"
+    
+    echo -e "${GREEN}✓${NC} Local logs cleared"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo -e "${GREEN}All done!${NC} Your $RECORD_COUNT execution record(s) have been uploaded."
+    echo "You can continue using javat for your next assignment."
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+else
+    echo -e "${RED}✗${NC} Upload failed (HTTP $HTTP_CODE)"
+    echo "Error: $BODY"
+    echo ""
+    echo "Your logs are still saved locally at: $LOG_FILE"
+    echo ""
+    echo "Possible issues:"
+    echo "  • Server might be down"
+    echo "  • Check JAVAT_SERVER_URL: $SERVER_URL"
+    echo "  • Contact your instructor for help"
+    exit 1
+fi
