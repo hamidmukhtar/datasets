@@ -6,7 +6,7 @@
 ###############################################################################
 
 # Configuration
-LOG_DIR="${JAVAT_LOG_DIR:-$HOME/.javat_logs}"
+LOG_DIR="${JAVAT_LOG_DIR:-/jupyter/work/.javat_logs}"
 LOG_FILE="$LOG_DIR/execution_log.csv"
 ERROR_LOG_DIR="$LOG_DIR/errors"
 
@@ -135,7 +135,7 @@ compile_java() {
     local java_file="$1"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local username=$(whoami)
-    local hostname=$(hostname)
+    local hostname= "Vlab" #$(hostname)
     local class_name=$(basename "$java_file" .java)
     local temp_error_file=$(mktemp)
     
@@ -169,7 +169,7 @@ run_java() {
     
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     local username=$(whoami)
-    local hostname=$(hostname)
+    local hostname="Vlab" #$(hostname)
     local temp_error_file=$(mktemp)
     local temp_output_file=$(mktemp)
     
