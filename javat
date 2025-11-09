@@ -1,0 +1,275 @@
+#!/bin/bash
+
+###############################################################################
+# Java Programming Tracker (javat)
+# A transparent wrapper for javac and java that logs student activity
+###############################################################################
+
+# Configuration
+LOG_DIR="${JAVAT_LOG_DIR:-$HOME/.javat_logs}"
+LOG_FILE="$LOG_DIR/execution_log.csv"
+ERROR_LOG_DIR="$LOG_DIR/errors"
+
+# Initialize logging directory and file
+init_logging() {
+    mkdir -p "$LOG_DIR"
+    mkdir -p "$ERROR_LOG_DIR"
+    
+    # Create CSV header if file doesn't exist
+    if [ ! -f "$LOG_FILE" ]; then
+        echo "timestamp,username,hostname,java_file,class_name,phase,status,exit_code,error_file" > "$LOG_FILE"
+    fi
+}
+
+# Log execution details
+log_execution() {
+    local timestamp="$1"
+    local username="$2"
+    local hostname="$3"
+    local java_file="$4"
+    local class_name="$5"
+    local phase="$6"        # "compilation" or "execution"
+    local status="$7"       # "success" or "failure"
+    local exit_code="$8"
+    local error_file="$9"
+    
+    echo "$timestamp,$username,$hostname,$java_file,$class_name,$phase,$status,$exit_code,$error_file" >> "$LOG_FILE"
+}
+
+# Display usage information
+usage() {
+    cat << EOF
+Java Programming Tracker (javat)
+
+Usage:
+    javat <JavaFile.java> [args...]        - Compile and run a Java program
+    javat -c <JavaFile.java>               - Compile only
+    javat -r <ClassName> [args...]         - Run only (class must be compiled)
+    javat --view-logs                      - View execution logs
+    javat --view-errors                    - View recent errors
+    javat --stats                          - Show statistics
+    javat --help                           - Show this help message
+
+Examples:
+    javat HelloWorld.java
+    javat MyProgram.java arg1 arg2
+    javat -c MyProgram.java
+    javat -r MyProgram arg1 arg2
+
+Environment Variables:
+    JAVAT_LOG_DIR    - Custom directory for logs (default: ~/.javat_logs)
+
+EOF
+    exit 0
+}
+
+# View logs
+view_logs() {
+    if [ ! -f "$LOG_FILE" ]; then
+        echo "No logs found."
+        exit 0
+    fi
+    
+    echo "Recent Java Execution Logs:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    column -t -s',' "$LOG_FILE" | tail -n 20
+}
+
+# View recent errors
+view_errors() {
+    if [ ! -d "$ERROR_LOG_DIR" ] || [ -z "$(ls -A $ERROR_LOG_DIR 2>/dev/null)" ]; then
+        echo "No errors found."
+        exit 0
+    fi
+    
+    echo "Recent Errors:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ls -t "$ERROR_LOG_DIR" | head -n 5 | while read error_file; do
+        echo ""
+        echo "File: $error_file"
+        echo "────────────────────────────────────────"
+        cat "$ERROR_LOG_DIR/$error_file"
+        echo ""
+    done
+}
+
+# Show statistics
+show_stats() {
+    if [ ! -f "$LOG_FILE" ]; then
+        echo "No logs found."
+        exit 0
+    fi
+    
+    echo "Java Programming Statistics:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Total executions
+    total=$(tail -n +2 "$LOG_FILE" | wc -l)
+    echo "Total Executions: $total"
+    
+    # Success/Failure counts
+    successful=$(tail -n +2 "$LOG_FILE" | grep ",success," | wc -l)
+    failed=$(tail -n +2 "$LOG_FILE" | grep ",failure," | wc -l)
+    echo "Successful: $successful"
+    echo "Failed: $failed"
+    
+    if [ $total -gt 0 ]; then
+        success_rate=$(awk "BEGIN {printf \"%.1f\", ($successful/$total)*100}")
+        echo "Success Rate: $success_rate%"
+    fi
+    
+    echo ""
+    echo "Most Frequently Run Files:"
+    tail -n +2 "$LOG_FILE" | cut -d',' -f4 | sort | uniq -c | sort -rn | head -n 5 | \
+        awk '{printf "  %s (Run %d times)\n", $2, $1}'
+    
+    echo ""
+    echo "Active Users:"
+    tail -n +2 "$LOG_FILE" | cut -d',' -f2 | sort | uniq -c | sort -rn | \
+        awk '{printf "  %s (%d executions)\n", $2, $1}'
+}
+
+# Compile Java file
+compile_java() {
+    local java_file="$1"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local username=$(whoami)
+    local hostname=$(hostname)
+    local class_name=$(basename "$java_file" .java)
+    local temp_error_file=$(mktemp)
+    
+    # Run javac and capture output
+    javac "$java_file" 2>"$temp_error_file"
+    local exit_code=$?
+    
+    if [ $exit_code -eq 0 ]; then
+        # Compilation successful
+        log_execution "$timestamp" "$username" "$hostname" "$java_file" "$class_name" "compilation" "success" "$exit_code" ""
+        rm -f "$temp_error_file"
+        return 0
+    else
+        # Compilation failed - save error
+        local error_filename="${timestamp//[ :]/_}_${username}_${class_name}_compile.err"
+        error_filename="${error_filename//\//_}"
+        mv "$temp_error_file" "$ERROR_LOG_DIR/$error_filename"
+        log_execution "$timestamp" "$username" "$hostname" "$java_file" "$class_name" "compilation" "failure" "$exit_code" "$error_filename"
+        
+        # Display error to user
+        cat "$ERROR_LOG_DIR/$error_filename"
+        return $exit_code
+    fi
+}
+
+# Run Java class
+run_java() {
+    local class_name="$1"
+    shift
+    local args="$@"
+    
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local username=$(whoami)
+    local hostname=$(hostname)
+    local temp_error_file=$(mktemp)
+    local temp_output_file=$(mktemp)
+    
+    # Run java and capture output
+    java "$class_name" $args 2>"$temp_error_file" | tee "$temp_output_file"
+    local exit_code=${PIPESTATUS[0]}
+    
+    if [ $exit_code -eq 0 ] && [ ! -s "$temp_error_file" ]; then
+        # Execution successful
+        log_execution "$timestamp" "$username" "$hostname" "${class_name}.java" "$class_name" "execution" "success" "$exit_code" ""
+        rm -f "$temp_error_file" "$temp_output_file"
+        return 0
+    else
+        # Execution failed - save error
+        local error_filename="${timestamp//[ :]/_}_${username}_${class_name}_run.err"
+        error_filename="${error_filename//\//_}"
+        
+        # Combine stderr and any relevant info
+        {
+            echo "Exit Code: $exit_code"
+            cat "$temp_error_file"
+        } > "$ERROR_LOG_DIR/$error_filename"
+        
+        log_execution "$timestamp" "$username" "$hostname" "${class_name}.java" "$class_name" "execution" "failure" "$exit_code" "$error_filename"
+        
+        rm -f "$temp_error_file" "$temp_output_file"
+        return $exit_code
+    fi
+}
+
+# Main execution logic
+main() {
+    init_logging
+    
+    # Parse arguments
+    if [ $# -eq 0 ]; then
+        usage
+    fi
+    
+    case "$1" in
+        --help|-h)
+            usage
+            ;;
+        --view-logs)
+            view_logs
+            ;;
+        --view-errors)
+            view_errors
+            ;;
+        --stats)
+            show_stats
+            ;;
+        -c)
+            # Compile only
+            shift
+            if [ $# -eq 0 ]; then
+                echo "Error: No Java file specified"
+                exit 1
+            fi
+            compile_java "$1"
+            exit $?
+            ;;
+        -r)
+            # Run only
+            shift
+            if [ $# -eq 0 ]; then
+                echo "Error: No class name specified"
+                exit 1
+            fi
+            run_java "$@"
+            exit $?
+            ;;
+        *.java)
+            # Compile and run
+            java_file="$1"
+            shift
+            remaining_args="$@"
+            
+            if [ ! -f "$java_file" ]; then
+                echo "Error: File '$java_file' not found"
+                exit 1
+            fi
+            
+            # Compile
+            if ! compile_java "$java_file"; then
+                exit 1
+            fi
+            
+            # Run
+            class_name=$(basename "$java_file" .java)
+            run_java "$class_name" $remaining_args
+            exit $?
+            ;;
+        *)
+            echo "Error: Invalid argument '$1'"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function
+main "$@"
