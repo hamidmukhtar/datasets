@@ -125,7 +125,7 @@ show_stats() {
         awk '{printf "  %s (Run %d times)\n", $2, $1}'
     
     echo ""
-    echo "Active Users:"
+    echo "Active User:"
     tail -n +2 "$LOG_FILE" | cut -d',' -f2 | sort | uniq -c | sort -rn | \
         awk '{printf "  %s (%d executions)\n", $2, $1}'
 }
