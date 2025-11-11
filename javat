@@ -134,7 +134,7 @@ show_stats() {
 compile_java() {
     local java_file="$1"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    local username=$(whoami)
+    local username=$OOP    #$(whoami)
     local hostname= "Vlab" #$(hostname)
     local class_name=$(basename "$java_file" .java)
     local temp_error_file=$(mktemp)
@@ -168,7 +168,7 @@ run_java() {
     local args="$@"
     
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    local username=$(whoami)
+    local username=$OOP   #$(whoami)
     local hostname="Vlab" #$(hostname)
     local temp_error_file=$(mktemp)
     local temp_output_file=$(mktemp)
